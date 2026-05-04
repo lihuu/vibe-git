@@ -93,7 +93,7 @@ $diff_summary
 $diff_content"
 
         if command -v claude >/dev/null 2>&1; then
-            msg=$(claude -p "$prompt" 2>/dev/null)
+            msg=$(claude -p "$prompt" -m "haiku" 2>/dev/null)
         elif command -v opencode >/dev/null 2>&1; then
             msg=$(opencode run "$prompt" 2>/dev/null)
         elif command -v acpx >/dev/null 2>&1; then
