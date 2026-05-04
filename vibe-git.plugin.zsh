@@ -83,7 +83,7 @@ gitcommit() {
 要求：
 1. 格式：<type>(<scope>): <subject>\n\n<body>
 2. Type: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert。
-3. 语言：中文。
+3. 语言：英文。
 4. 输出：只输出原始文本，无 Markdown。
 
 变更统计：
