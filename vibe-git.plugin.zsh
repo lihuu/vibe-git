@@ -110,6 +110,66 @@ $diff_content"
     git commit -m "$msg"
 }
 
+
+# ----------------------------------------------------------------
+# GitHub Keychain 远程助手 (Smart Context Version)
+# ----------------------------------------------------------------
+
+# 内部环境检测函数（不对外暴露，仅供逻辑判断）
+function _is_remote_macos() {
+    # 1. 检查是否为 macOS
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        return 1
+    fi
+    # 2. 检查是否处于 SSH 会话 (检查 SSH_TTY 或 SSH_CLIENT)
+    if [[ -z "$SSH_TTY" && -z "$SSH_CLIENT" && -z "$SSH_CONNECTION" ]]; then
+        return 2
+    fi
+    return 0
+}
+
+# 解锁函数
+function gh-unlock() {
+    _is_remote_macos
+    local env_status=$?
+
+    if [[ $env_status -eq 1 ]]; then
+        echo "ℹ️  此脚本仅适用于 macOS 系统。"
+        return 0
+    elif [[ $env_status -eq 2 ]]; then
+        echo "💡 当前为本地会话，钥匙串通常已随登录解锁，无需执行此命令。"
+        return 0
+    fi
+
+    # 只有远程 macOS 才会走到这里
+    local kc="${MAC_KEYCHAIN_DB:-$HOME/Library/Keychains/login.keychain-db}"
+    local timeout=1800 
+
+    echo -n "🔑 [Remote] 正在通过 SSH 解锁钥匙串，请输入登录密码: "
+    read -s password
+    echo ""
+
+    if security unlock-keychain -p "$password" "$kc" 2>/dev/null; then
+        security set-keychain-settings -t "$timeout" -l "$kc"
+        echo "✅ 解锁成功！30 分钟内有效。"
+        command -v gh >/dev/null 2>&1 && gh auth status
+    else
+        echo "❌ 密码错误或解锁失败。"
+        return 1
+    fi
+}
+
+# 加锁函数
+function gh-lock() {
+    _is_remote_macos
+    if [[ $? -eq 0 ]]; then
+        local kc="${MAC_KEYCHAIN_DB:-$HOME/Library/Keychains/login.keychain-db}"
+        security lock-keychain "$kc" && echo "🔒 远程会话钥匙串已锁定。"
+    else
+        echo "ℹ️  非远程会话或非 macOS，无需锁定。"
+    fi
+}
+
 # 3. 设置短别名（Alias）
 alias gi='gitignore'
 alias gc='gitcommit'
