@@ -1,4 +1,36 @@
-
+# vibe-git — A Zsh plugin with smart git utilities and i18n support.
+#
+# Environment variables:
+#   VG_LANG   Force language override. Set to "zh" or "en".
+#             If unset, falls back to $LANG system locale.
+#
+# Functions:
+#
+#   gitignore (alias: gi)
+#     Manage .gitignore entries with optional index cleanup.
+#     Usage:
+#       gi <pattern>            Add pattern to .gitignore in current repo
+#       gi -g <pattern>         Add pattern to global .gitignore
+#       gi -f <pattern>         Add pattern and remove matching files from Git index
+#       gi -g -f <pattern>      Combine global + force-untrack
+#
+#   gitcommit (alias: gc)
+#     Stage all changes and commit. When no message is provided,
+#     calls an AI client (claude > opencode > acpx) to generate one
+#     following the Conventional Commits specification.
+#     Usage:
+#       gc                      Auto-stage, AI-generate commit message, and commit
+#       gc "fix: my message"    Auto-stage and commit with the given message
+#
+#   gh-unlock
+#     Unlock the macOS login keychain over a remote SSH session.
+#     Prompts for the login password; unlocks for 30 minutes.
+#     No-op on local sessions or non-macOS systems.
+#
+#   gh-lock
+#     Lock the macOS login keychain in a remote SSH session.
+#     No-op on local sessions or non-macOS systems.
+#
 # ----------------------------------------------------------------
 # Internationalization (i18n)
 # ----------------------------------------------------------------
