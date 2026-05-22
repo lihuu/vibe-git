@@ -16,11 +16,17 @@
 #
 #   gitcommit (alias: gc)
 #     Stage all changes and commit. When no message is provided,
-#     calls an AI client (claude > opencode > acpx) to generate one
-#     following the Conventional Commits specification.
+#     calls an AI client to generate one following the Conventional
+#     Commits specification.
+#     Supported backends: claude, copilot, qwen, codex, gemini,
+#                         opencode, aichat, acpx.
+#     Default auto-detect order: claude > codex > gemini > qwen >
+#                                copilot > opencode > aichat > acpx.
 #     Usage:
-#       gc                      Auto-stage, AI-generate commit message, and commit
-#       gc "fix: my message"    Auto-stage and commit with the given message
+#       gc                          Auto-stage, AI-generate, and commit
+#       gc "fix: my message"        Auto-stage and commit with the message
+#       gc -a qwen                  Force backend (also: --agent qwen)
+#       gc -a gemini "fix: foo"     Backend ignored when message is given
 #
 #   gh-unlock
 #     Unlock the macOS login keychain over a remote SSH session.
@@ -66,8 +72,14 @@ _vg_msg() {
         "calling_ai:en")         echo "🤖 Calling AI tools to generate commit message..." ;;
         "no_changes:zh")         echo "⚠️  提示：没有检测到已暂存的变更。" ;;
         "no_changes:en")         echo "⚠️  Note: No staged changes detected." ;;
-        "no_ai_client:zh")       echo "❌ 错误：未找到 claude 或 ACP 客户端。" ;;
-        "no_ai_client:en")       echo "❌ Error: No claude or ACP client found." ;;
+        "no_ai_client:zh")       echo "❌ 错误：未找到任何受支持的 AI 客户端 (claude/codex/gemini/qwen/copilot/opencode/aichat/acpx)。" ;;
+        "no_ai_client:en")       echo "❌ Error: No supported AI client found (claude/codex/gemini/qwen/copilot/opencode/aichat/acpx)." ;;
+        "unknown_agent:zh")      echo "❌ 错误：未知后端 '$1'。支持: claude, copilot, qwen, codex, gemini, opencode, aichat, acpx。" ;;
+        "unknown_agent:en")      echo "❌ Error: Unknown agent '$1'. Supported: claude, copilot, qwen, codex, gemini, opencode, aichat, acpx." ;;
+        "agent_not_installed:zh") echo "❌ 错误：后端 '$1' 未安装或不在 PATH 中。" ;;
+        "agent_not_installed:en") echo "❌ Error: Agent '$1' is not installed or not in PATH." ;;
+        "missing_agent_value:zh") echo "❌ 错误：-a/--agent 需要一个后端名作为参数。" ;;
+        "missing_agent_value:en") echo "❌ Error: -a/--agent requires a backend name." ;;
         "ai_failed:zh")          echo "❌ 错误：AI 生成失败。" ;;
         "ai_failed:en")          echo "❌ Error: AI generation failed." ;;
         "suggested_msg:zh")      echo "--- 推荐信息 ---" ;;
@@ -147,6 +159,25 @@ gitignore() {
     done
 }
 
+# Dispatch a prompt to a specific AI backend.
+# Args: $1 = backend name, $2 = prompt
+# Echoes the model's response on stdout. Returns non-zero on failure.
+_vg_ai_call() {
+    local backend="$1"
+    local prompt="$2"
+    case "$backend" in
+        claude)   claude -p "$prompt" --model "haiku" 2>/dev/null ;;
+        copilot)  copilot -p "$prompt" --allow-all-tools 2>/dev/null ;;
+        qwen)     qwen -p "$prompt" 2>/dev/null ;;
+        codex)    codex exec --skip-git-repo-check "$prompt" 2>/dev/null ;;
+        gemini)   gemini -p "$prompt" 2>/dev/null ;;
+        opencode) opencode run "$prompt" 2>/dev/null ;;
+        aichat)   aichat "$prompt" 2>/dev/null ;;
+        acpx)     acpx claude "$prompt" 2>/dev/null ;;
+        *)        return 127 ;;
+    esac
+}
+
 # 2. AI-powered gitcommit function
 gitcommit() {
     local repo_root
@@ -156,9 +187,31 @@ gitcommit() {
         return 1
     fi
 
+    local agent=""
+    local args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -a|--agent)
+                if [ -z "$2" ]; then
+                    echo "$(_vg_msg missing_agent_value)"
+                    return 1
+                fi
+                agent="$2"; shift 2 ;;
+            *)
+                args+=("$1"); shift ;;
+        esac
+    done
+
+    if [ -n "$agent" ]; then
+        case "$agent" in
+            claude|copilot|qwen|codex|gemini|opencode|aichat|acpx) ;;
+            *) echo "$(_vg_msg unknown_agent "$agent")"; return 1 ;;
+        esac
+    fi
+
     git add .
 
-    local msg="$*"
+    local msg="${args[*]}"
 
     if [ -z "$msg" ]; then
         echo "$(_vg_msg calling_ai)"
@@ -184,15 +237,24 @@ $diff_summary
 Code diff:
 $diff_content"
 
-        if command -v claude >/dev/null 2>&1; then
-            msg=$(claude -p "$prompt" --model "haiku" 2>/dev/null)
-        elif command -v opencode >/dev/null 2>&1; then
-            msg=$(opencode run "$prompt" 2>/dev/null)
-        elif command -v acpx >/dev/null 2>&1; then
-            msg=$(acpx claude "$prompt" 2>/dev/null)
+        if [ -n "$agent" ]; then
+            if ! command -v "$agent" >/dev/null 2>&1; then
+                echo "$(_vg_msg agent_not_installed "$agent")"
+                return 1
+            fi
+            msg=$(_vg_ai_call "$agent" "$prompt")
         else
-            echo "$(_vg_msg no_ai_client)"
-            return 1
+            local b
+            for b in claude codex gemini qwen copilot opencode aichat acpx; do
+                if command -v "$b" >/dev/null 2>&1; then
+                    msg=$(_vg_ai_call "$b" "$prompt")
+                    [ -n "$msg" ] && break
+                fi
+            done
+            if [ -z "$msg" ]; then
+                echo "$(_vg_msg no_ai_client)"
+                return 1
+            fi
         fi
 
         if [ -z "$msg" ]; then echo "$(_vg_msg ai_failed)"; return 1; fi
