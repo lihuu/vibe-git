@@ -321,6 +321,26 @@ function gh-lock() {
     fi
 }
 
+gitlog () {
+        if ! command -v fzf &>/dev/null; then
+            echo "❌ fzf 未安装 / fzf not found"
+            echo ""
+            echo "📦 安装方法 / Installation:"
+            echo "  macOS (Homebrew):   brew install fzf"
+            echo "  Ubuntu/Debian:      sudo apt install fzf"
+            echo "  Fedora:             sudo dnf install fzf"
+            echo "  Arch Linux:         sudo pacman -S fzf"
+            echo "  或访问 / Or visit:  https://github.com/junegunn/fzf#installation"
+            return 1
+        fi
+
+        git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" | fzf --ansi --no-sort --reverse --tiebreak=index --bind=ctrl-s:toggle-sort --bind "ctrl-m:execute:
+                (grep -o '[a-f0-9]\{7\}' | head -1 |
+                xargs -I % sh -c 'git show --color=always % | less -R') << 'FZF-EOF'
+                {}
+FZF-EOF"
+}
+
 # 3. Short aliases
 alias gi='gitignore'
 alias gc='gitcommit'
